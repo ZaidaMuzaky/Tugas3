@@ -1,0 +1,392 @@
+<!-- Template: DO Tracking Component -->
+<!-- 
+    Komponen ini mengimplementasikan:
+    - v-for untuk menampilkan daftar tracking
+    - v-model untuk search dan form input
+    - v-if/v-else untuk conditional rendering
+    - computed properties untuk filter dan auto-generate DO number
+    - watchers untuk reactive updates
+    - Event keyboard (Enter untuk search, Esc untuk reset)
+    - Formatting tanggal dengan Date methods
+-->
+<div class="tracking-container">
+    <!-- Header Section -->
+    <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+        <h2 class="text-xl font-bold text-gray-800">
+            Tracking Delivery Order
+        </h2>
+        <button @click="openAddForm" type="button" class="text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5">
+            + Tambah DO Baru
+        </button>
+    </div>
+
+    <!-- Search Section - v-model untuk two-way binding -->
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+        <div class="flex flex-wrap gap-4 items-end">
+            <!-- Search Type -->
+            <div class="filter-group">
+                <label class="block mb-1 text-sm font-medium text-gray-700">Cari berdasarkan:</label>
+                <select v-model="searchType" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                    <option value="nomorDO">Nomor DO</option>
+                    <option value="nim">NIM</option>
+                </select>
+            </div>
+
+            <!-- Search Input dengan event keyboard -->
+            <div class="filter-group flex-1" style="min-width: 200px;">
+                <label class="block mb-1 text-sm font-medium text-gray-700">Kata kunci:</label>
+                <div class="relative">
+                    <input 
+                        v-model="searchQuery"
+                        type="text" 
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 pr-10"
+                        :placeholder="searchType === 'nomorDO' ? 'Contoh: DO2025-0001' : 'Contoh: 123456789'"
+                        @keydown="handleSearchKeydown"
+                    >
+                    <!-- Clear button - v-show untuk tampilkan jika ada query -->
+                    <button 
+                        v-show="searchQuery"
+                        @click="clearSearch"
+                        type="button"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        title="Hapus pencarian (Esc)"
+                    >
+                        X
+                    </button>
+                </div>
+            </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-3">
+            Tekan <kbd class="bg-gray-200 px-1.5 py-0.5 rounded">Enter</kbd> untuk mencari atau 
+            <kbd class="bg-gray-200 px-1.5 py-0.5 rounded">Esc</kbd> untuk reset
+        </p>
+    </div>
+
+    <!-- Results Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Tracking List -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="px-4 py-3 border-b bg-gray-50">
+                <h3 class="font-medium">Daftar Delivery Order ({{ filteredTracking.length }})</h3>
+            </div>
+            <div class="p-0">
+                <!-- Empty State - v-if -->
+                <div v-if="filteredTracking.length === 0" class="empty-state py-12">
+                    <p class="text-gray-500 mb-2">Tidak ada DO yang ditemukan</p>
+                    <button 
+                        v-if="searchQuery"
+                        @click="clearSearch" 
+                        type="button"
+                        class="text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-100 font-medium rounded-lg text-sm px-4 py-2"
+                    >
+                        Reset Pencarian
+                    </button>
+                </div>
+
+                <!-- Tracking Items - v-for -->
+                <div 
+                    v-for="item in filteredTracking"
+                    :key="item.nomorDO"
+                    class="p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                    :class="{ 'bg-blue-50 border-l-4 border-l-blue-500': selectedDO && selectedDO.nomorDO === item.nomorDO }"
+                    @click="selectDO(item)"
+                >
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <span class="font-bold text-blue-600">{{ item.nomorDO }}</span>
+                            <span :class="['text-xs font-medium px-2.5 py-0.5 rounded ml-2', getStatusClass(item.status)]">
+                                {{ item.status }}
+                            </span>
+                        </div>
+                        <span class="text-xs text-gray-500">{{ formatDate(item.tanggalKirim) }}</span>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        <p><strong>NIM:</strong> {{ item.nim }} - {{ item.nama }}</p>
+                        <p><strong>Paket:</strong> {{ getPaketNama(item.paket) }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detail Panel -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="px-4 py-3 border-b bg-gray-50 flex justify-between items-center">
+                <h3 class="font-medium">Detail Tracking</h3>
+                <button 
+                    v-if="selectedDO"
+                    @click="closeDetail" 
+                    type="button"
+                    class="text-gray-400 hover:text-gray-600"
+                >
+                    X
+                </button>
+            </div>
+            <div class="p-4">
+                <!-- No Selection - v-if -->
+                <div v-if="!selectedDO" class="empty-state py-8">
+                    <p class="text-gray-500">Pilih DO dari daftar untuk melihat detail</p>
+                </div>
+
+                <!-- Detail View - v-else -->
+                <div v-else>
+                    <!-- Header Info -->
+                    <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                        <div class="flex justify-between items-start mb-3">
+                            <h4 class="text-lg font-bold text-blue-600">{{ selectedDO.nomorDO }}</h4>
+                            <span :class="['text-xs font-medium px-2.5 py-0.5 rounded', getStatusClass(selectedDO.status)]">
+                                {{ selectedDO.status }}
+                            </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <span class="text-gray-500">NIM:</span>
+                                <span class="font-medium ml-1">{{ selectedDO.nim }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Nama:</span>
+                                <span class="font-medium ml-1">{{ selectedDO.nama }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Ekspedisi:</span>
+                                <span class="font-medium ml-1">{{ getEkspedisiNama(selectedDO.ekspedisi) }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Tanggal Kirim:</span>
+                                <span class="font-medium ml-1">{{ formatDate(selectedDO.tanggalKirim) }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Paket:</span>
+                                <span class="font-medium ml-1">{{ getPaketNama(selectedDO.paket) }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Total:</span>
+                                <span class="font-bold text-green-600 ml-1">{{ formatCurrency(selectedDO.total) }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Perjalanan -->
+                    <div class="mb-4">
+                        <div class="flex justify-between items-center mb-3">
+                            <h5 class="font-medium text-gray-700">Riwayat Perjalanan</h5>
+                            <button 
+                                @click="openProgressForm(selectedDO)" 
+                                type="button"
+                                class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-xs px-3 py-1.5"
+                            >
+                                + Tambah Progress
+                            </button>
+                        </div>
+                        
+                        <!-- Timeline - v-for -->
+                        <div class="timeline">
+                            <div 
+                                v-for="(progress, idx) in selectedDO.perjalanan" 
+                                :key="idx"
+                                class="timeline-item"
+                            >
+                                <div class="text-xs text-gray-500 mb-1">
+                                    {{ formatDateTime(progress.waktu) }}
+                                </div>
+                                <div class="text-sm text-gray-700">
+                                    {{ progress.keterangan }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Update Buttons -->
+                    <div class="border-t pt-4">
+                        <p class="text-sm text-gray-500 mb-2">Update Status:</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button 
+                                @click="updateStatus(selectedDO, 'Pending')"
+                                type="button"
+                                :class="[
+                                    'focus:ring-4 font-medium rounded-lg text-xs px-3 py-1.5',
+                                    selectedDO.status === 'Pending' 
+                                        ? 'text-white bg-yellow-500 focus:ring-yellow-300' 
+                                        : 'text-yellow-700 border border-yellow-700 hover:bg-yellow-700 hover:text-white focus:ring-yellow-300'
+                                ]"
+                            >
+                                Pending
+                            </button>
+                            <button 
+                                @click="updateStatus(selectedDO, 'Dalam Perjalanan')"
+                                type="button"
+                                :class="[
+                                    'focus:ring-4 font-medium rounded-lg text-xs px-3 py-1.5',
+                                    selectedDO.status === 'Dalam Perjalanan' 
+                                        ? 'text-white bg-blue-600 focus:ring-blue-300' 
+                                        : 'text-blue-700 border border-blue-700 hover:bg-blue-700 hover:text-white focus:ring-blue-300'
+                                ]"
+                            >
+                                Dalam Perjalanan
+                            </button>
+                            <button 
+                                @click="updateStatus(selectedDO, 'Terkirim')"
+                                type="button"
+                                :class="[
+                                    'focus:ring-4 font-medium rounded-lg text-xs px-3 py-1.5',
+                                    selectedDO.status === 'Terkirim' 
+                                        ? 'text-white bg-green-600 focus:ring-green-300' 
+                                        : 'text-green-700 border border-green-700 hover:bg-green-700 hover:text-white focus:ring-green-300'
+                                ]"
+                            >
+                                Terkirim
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add DO Modal -->
+    <div v-if="showAddForm" class="modal-overlay" @click.self="closeAddForm">
+        <div class="modal-content" style="max-width: 600px;" @keydown="handleAddKeydown">
+            <div class="modal-header">
+                <h3 class="modal-title">Tambah Delivery Order Baru</h3>
+                <button @click="closeAddForm" type="button" class="modal-close">X</button>
+            </div>
+            <div class="modal-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Nomor DO (Auto-generated) -->
+                    <div class="md:col-span-2">
+                        <label class="block mb-1 text-sm font-medium text-gray-700">Nomor DO</label>
+                        <input 
+                            :value="generatedDONumber"
+                            type="text" 
+                            class="bg-gray-100 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 font-mono font-bold text-blue-600"
+                            disabled
+                        >
+                        <p class="text-xs text-gray-500 mt-1">Nomor DO digenerate otomatis</p>
+                    </div>
+
+                    <!-- NIM -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">NIM <span class="text-red-500">*</span></label>
+                        <input 
+                            v-model="newDO.nim"
+                            type="text" 
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.nim ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                            placeholder="Contoh: 123456789"
+                        >
+                        <span v-if="errors.nim" class="text-red-500 text-xs mt-1">{{ errors.nim }}</span>
+                    </div>
+
+                    <!-- Nama -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">Nama Lengkap <span class="text-red-500">*</span></label>
+                        <input 
+                            v-model="newDO.nama"
+                            type="text" 
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.nama ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                            placeholder="Nama penerima"
+                        >
+                        <span v-if="errors.nama" class="text-red-500 text-xs mt-1">{{ errors.nama }}</span>
+                    </div>
+
+                    <!-- Ekspedisi -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">Ekspedisi <span class="text-red-500">*</span></label>
+                        <select 
+                            v-model="newDO.ekspedisi"
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.ekspedisi ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                        >
+                            <option value="">Pilih Ekspedisi</option>
+                            <option v-for="exp in pengirimanList" :key="exp.kode" :value="exp.kode">
+                                {{ exp.nama }}
+                            </option>
+                        </select>
+                        <span v-if="errors.ekspedisi" class="text-red-500 text-xs mt-1">{{ errors.ekspedisi }}</span>
+                    </div>
+
+                    <!-- Tanggal Kirim -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">Tanggal Kirim <span class="text-red-500">*</span></label>
+                        <input 
+                            v-model="newDO.tanggalKirim"
+                            type="date" 
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.tanggalKirim ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                        >
+                        <span v-if="errors.tanggalKirim" class="text-red-500 text-xs mt-1">{{ errors.tanggalKirim }}</span>
+                    </div>
+
+                    <!-- Paket Bahan Ajar -->
+                    <div class="md:col-span-2">
+                        <label class="block mb-1 text-sm font-medium text-gray-700">Paket Bahan Ajar <span class="text-red-500">*</span></label>
+                        <select 
+                            v-model="newDO.paket"
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.paket ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                        >
+                            <option value="">Pilih Paket</option>
+                            <option v-for="p in paketList" :key="p.kode" :value="p.kode">
+                                {{ p.kode }} - {{ p.nama }} ({{ formatCurrency(p.harga) }})
+                            </option>
+                        </select>
+                        <span v-if="errors.paket" class="text-red-500 text-xs mt-1">{{ errors.paket }}</span>
+                    </div>
+
+                    <!-- Detail Paket (v-if conditional) -->
+                    <div v-if="selectedPaketDetail" class="md:col-span-2 bg-blue-50 rounded-lg p-4">
+                        <h4 class="font-medium text-gray-700 mb-2">Isi Paket:</h4>
+                        <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                            <li v-for="(item, idx) in selectedPaketDetail.itemDetails" :key="idx">
+                                {{ item }}
+                            </li>
+                        </ul>
+                        <div class="mt-3 pt-3 border-t border-blue-200">
+                            <span class="text-gray-600">Total Harga:</span>
+                            <span class="font-bold text-green-600 text-lg ml-2">
+                                {{ formatCurrency(totalHarga) }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button @click="closeAddForm" type="button" class="text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-100 font-medium rounded-lg text-sm px-5 py-2.5">Batal</button>
+                <button @click="submitDO" type="button" class="text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5">Simpan DO</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Progress Modal -->
+    <div v-if="showProgressForm" class="modal-overlay" @click.self="closeProgressForm">
+        <div class="modal-content" style="max-width: 400px;" @keydown="handleProgressKeydown">
+            <div class="modal-header">
+                <h3 class="modal-title">Tambah Progress</h3>
+                <button @click="closeProgressForm" type="button" class="modal-close">X</button>
+            </div>
+            <div class="modal-body">
+                <div>
+                    <label class="block mb-1 text-sm font-medium text-gray-700">
+                        Keterangan <span class="text-red-500">*</span>
+                    </label>
+                    <textarea 
+                        v-model="newProgress.keterangan"
+                        class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                        :class="errors.keterangan ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                        rows="3"
+                        placeholder="Contoh: Paket sampai di Hub Jakarta"
+                    ></textarea>
+                    <span v-if="errors.keterangan" class="text-red-500 text-xs mt-1">{{ errors.keterangan }}</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-3">
+                    Waktu akan direkam otomatis: {{ getCurrentDateTime() }}
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button @click="closeProgressForm" type="button" class="text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-100 font-medium rounded-lg text-sm px-5 py-2.5">Batal</button>
+                <button @click="submitProgress" type="button" class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5">Simpan</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,467 @@
+<!-- Template: Stock Table Component -->
+<!-- 
+    Komponen ini mengimplementasikan:
+    - v-for untuk menampilkan daftar data (array iteration)
+    - v-if/v-else/v-show untuk conditional rendering
+    - v-model untuk two-way data binding pada filter dan form
+    - v-bind untuk attribute binding
+    - v-on (@) untuk event handling
+    - computed properties untuk filter/sort
+    - watchers untuk dependent options
+    - v-html untuk menampilkan catatan HTML
+    - Event keyboard (Enter, Escape)
+-->
+<div class="stock-table-container">
+    <!-- Header Section -->
+    <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+        <h2 class="text-xl font-bold text-gray-800">
+            Daftar Stok Bahan Ajar
+        </h2>
+        <button @click="openAddForm" type="button" class="text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5">
+            + Tambah Bahan Ajar
+        </button>
+    </div>
+
+    <!-- Filter Section - Menerapkan v-model untuk two-way binding -->
+    <div class="filter-section">
+        <!-- Filter UPBJJ - v-model & v-for -->
+        <div class="filter-group">
+            <label class="block mb-1 text-sm font-medium text-gray-700">Filter UT-Daerah:</label>
+            <select v-model="filterUpbjj" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                <option value="">Semua UPBJJ</option>
+                <!-- v-for untuk iterasi array upbjjList -->
+                <option v-for="upbjj in upbjjList" :key="upbjj" :value="upbjj">
+                    {{ upbjj }}
+                </option>
+            </select>
+        </div>
+
+        <!-- Filter Kategori (Dependent Options) - v-show untuk conditional display -->
+        <div class="filter-group" v-show="filterUpbjj">
+            <label class="block mb-1 text-sm font-medium text-gray-700">Filter Kategori:</label>
+            <select v-model="filterKategori" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                <option value="">Semua Kategori</option>
+                <!-- availableKategori adalah computed property yang bergantung pada filterUpbjj -->
+                <option v-for="kat in availableKategori" :key="kat" :value="kat">
+                    {{ kat }}
+                </option>
+            </select>
+        </div>
+
+        <!-- Filter Stok - v-model dengan dropdown -->
+        <div class="filter-group">
+            <label class="block mb-1 text-sm font-medium text-gray-700">Filter Stok:</label>
+            <select v-model="filterStokStatus" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                <option value="">Semua Status</option>
+                <option value="aman">Aman</option>
+                <option value="menipis">Menipis</option>
+                <option value="kosong">Kosong</option>
+            </select>
+        </div>
+
+        <!-- Sort Options -->
+        <div class="filter-group">
+            <label class="block mb-1 text-sm font-medium text-gray-700">Urutkan:</label>
+            <select v-model="sortBy" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                <option value="">Default</option>
+                <option value="judul">Judul</option>
+                <option value="qty">Stok</option>
+                <option value="harga">Harga</option>
+            </select>
+        </div>
+
+        <!-- Sort Order - v-show berdasarkan kondisi -->
+        <div class="filter-group" v-show="sortBy">
+            <label class="block mb-1 text-sm font-medium text-gray-700">Urutan:</label>
+            <select v-model="sortOrder" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                <option value="asc">A-Z / Kecil ke Besar</option>
+                <option value="desc">Z-A / Besar ke Kecil</option>
+            </select>
+        </div>
+
+        <!-- Reset Button - v-show jika ada filter aktif -->
+        <div class="filter-group" v-show="hasActiveFilter">
+            <label class="block mb-1 text-sm font-medium text-gray-700">&nbsp;</label>
+            <button @click="resetFilters" type="button" class="text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-100 font-medium rounded-lg text-sm px-4 py-2">
+                Reset Filter
+            </button>
+        </div>
+    </div>
+
+    <!-- Info Filtered - Menggunakan mustache interpolation -->
+    <div class="text-sm text-gray-500 mb-3" v-show="hasActiveFilter">
+        Menampilkan <strong>{{ totalFiltered }}</strong> dari <strong>{{ items.length }}</strong> data
+    </div>
+
+    <!-- Data Table Card -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th class="w-12">No</th>
+                        <th @click="toggleSort('kode')" class="cursor-pointer hover:bg-gray-100">
+                            Kode MK 
+                            <span class="text-xs">{{ getSortIcon('kode') }}</span>
+                        </th>
+                        <th @click="toggleSort('judul')" class="cursor-pointer hover:bg-gray-100">
+                            Judul
+                            <span class="text-xs">{{ getSortIcon('judul') }}</span>
+                        </th>
+                        <th>Kategori</th>
+                        <th>UPBJJ</th>
+                        <th>Lokasi Rak</th>
+                        <th @click="toggleSort('harga')" class="cursor-pointer hover:bg-gray-100 text-right">
+                            Harga
+                            <span class="text-xs">{{ getSortIcon('harga') }}</span>
+                        </th>
+                        <th @click="toggleSort('qty')" class="cursor-pointer hover:bg-gray-100 text-center">
+                            Stok
+                            <span class="text-xs">{{ getSortIcon('qty') }}</span>
+                        </th>
+                        <th class="text-center">Safety</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center w-24">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Empty State - v-if untuk conditional rendering -->
+                    <tr v-if="filteredAndSortedItems.length === 0">
+                        <td colspan="11" class="text-center py-8">
+                            <div class="empty-state">
+                                <p class="text-gray-500 mb-2">Tidak ada data yang ditemukan</p>
+                                <button 
+                                    v-if="hasActiveFilter"
+                                    @click="resetFilters" 
+                                    type="button"
+                                    class="text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-100 font-medium rounded-lg text-sm px-4 py-2"
+                                >
+                                    Reset Filter
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Data Rows - v-for dengan template -->
+                    <template v-for="(item, index) in filteredAndSortedItems">
+                        <!-- Edit Mode Row - v-if/v-else untuk toggle tampilan -->
+                        <tr v-if="editingItem === item.kode" :key="item.kode + '-edit'" class="bg-blue-50">
+                            <td>{{ index + 1 }}</td>
+                            <td>
+                                <input 
+                                    v-model="editForm.kode" 
+                                    type="text" 
+                                    class="bg-gray-100 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2" 
+                                    disabled
+                                    title="Kode tidak dapat diubah"
+                                >
+                            </td>
+                            <td>
+                                <input 
+                                    v-model="editForm.judul" 
+                                    type="text" 
+                                    class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2"
+                                    :class="errors.judul ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                                    @keydown="handleEditKeydown"
+                                    placeholder="Judul"
+                                >
+                            </td>
+                            <td>
+                                <select 
+                                    v-model="editForm.kategori" 
+                                    class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2"
+                                    :class="errors.kategori ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                                >
+                                    <option value="">Pilih</option>
+                                    <option v-for="kat in kategoriList" :key="kat" :value="kat">
+                                        {{ kat }}
+                                    </option>
+                                </select>
+                            </td>
+                            <td>
+                                <select 
+                                    v-model="editForm.upbjj" 
+                                    class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2"
+                                    :class="errors.upbjj ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                                >
+                                    <option value="">Pilih</option>
+                                    <option v-for="u in upbjjList" :key="u" :value="u">
+                                        {{ u }}
+                                    </option>
+                                </select>
+                            </td>
+                            <td>
+                                <input 
+                                    v-model="editForm.lokasiRak" 
+                                    type="text" 
+                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2" 
+                                    @keydown="handleEditKeydown"
+                                    placeholder="R1-A1"
+                                >
+                            </td>
+                            <td>
+                                <input 
+                                    v-model.number="editForm.harga" 
+                                    type="number" 
+                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 text-right" 
+                                    @keydown="handleEditKeydown"
+                                    min="0"
+                                >
+                            </td>
+                            <td>
+                                <input 
+                                    v-model.number="editForm.qty" 
+                                    type="number" 
+                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-20 p-2 text-center" 
+                                    @keydown="handleEditKeydown"
+                                    min="0"
+                                >
+                            </td>
+                            <td>
+                                <input 
+                                    v-model.number="editForm.safety" 
+                                    type="number" 
+                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-20 p-2 text-center" 
+                                    @keydown="handleEditKeydown"
+                                    min="0"
+                                >
+                            </td>
+                            <td class="text-center">-</td>
+                            <td>
+                                <div class="flex gap-1 justify-center">
+                                    <button @click="saveEdit" type="button" class="text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-xs px-3 py-1.5" title="Simpan (Enter)">
+                                        Simpan
+                                    </button>
+                                    <button @click="cancelEdit" type="button" class="text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-100 font-medium rounded-lg text-xs px-3 py-1.5" title="Batal (Esc)">
+                                        Batal
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Normal Display Row - v-else -->
+                        <tr v-else :key="item.kode" class="hover:bg-gray-50">
+                            <td class="text-gray-500">{{ index + 1 }}</td>
+                            <td>
+                                <span class="font-medium text-blue-600">{{ item.kode }}</span>
+                            </td>
+                            <td class="font-medium">{{ item.judul }}</td>
+                            <td>
+                                <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">{{ item.kategori }}</span>
+                            </td>
+                            <td>{{ item.upbjj }}</td>
+                            <td>
+                                <code class="text-sm bg-gray-100 px-2 py-1 rounded">{{ item.lokasiRak }}</code>
+                            </td>
+                            <!-- Menggunakan method formatCurrency untuk filter/formatting -->
+                            <td class="text-right font-medium">{{ formatCurrency(item.harga) }}</td>
+                            <td class="text-center">
+                                <!-- v-bind:class untuk dynamic class binding -->
+                                <span :class="[
+                                    'font-bold',
+                                    item.qty >= item.safety ? 'text-green-600' : 
+                                    item.qty > 0 ? 'text-yellow-500' : 'text-red-600'
+                                ]">
+                                    {{ formatQty(item.qty) }}
+                                </span>
+                            </td>
+                            <td class="text-center text-gray-500">{{ formatQty(item.safety) }}</td>
+                            <td class="text-center">
+                                <!-- Status Badge with Tooltip - v-html untuk catatan HTML -->
+                                <div 
+                                    class="tooltip-container inline-block"
+                                    @mouseenter="showTooltip(item)"
+                                    @mouseleave="hideTooltip"
+                                >
+                                    <span :class="['text-xs font-medium px-2.5 py-0.5 rounded', getStockStatus(item).class]">
+                                        {{ getStockStatus(item).label }}
+                                    </span>
+                                    <!-- Tooltip dengan v-html untuk render HTML dari catatan -->
+                                    <div 
+                                        v-show="hoveredItem === item.kode && item.catatanHTML"
+                                        class="tooltip-box"
+                                        v-html="item.catatanHTML"
+                                    ></div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="flex gap-1 justify-center">
+                                    <button 
+                                        @click="startEdit(item)" 
+                                        type="button"
+                                        class="text-blue-700 border border-blue-700 hover:bg-blue-700 hover:text-white focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-xs px-3 py-1.5"
+                                        title="Edit"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button 
+                                        @click="deleteItem(item)" 
+                                        type="button"
+                                        class="text-red-700 border border-red-700 hover:bg-red-700 hover:text-white focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-xs px-3 py-1.5"
+                                        title="Hapus"
+                                    >
+                                        Hapus
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add Form Modal - Form dengan validasi -->
+    <div v-if="showAddForm" class="modal-overlay" @click.self="closeAddForm">
+        <div class="modal-content" style="max-width: 600px;" @keydown="handleAddKeydown">
+            <div class="modal-header">
+                <h3 class="modal-title">Tambah Bahan Ajar Baru</h3>
+                <button @click="closeAddForm" type="button" class="modal-close">X</button>
+            </div>
+            <div class="modal-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Kode MK -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">
+                            Kode MK <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            v-model="newItem.kode" 
+                            type="text" 
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.kode ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                            placeholder="Contoh: EKMA4116"
+                        >
+                        <span v-if="errors.kode" class="text-red-500 text-xs mt-1">{{ errors.kode }}</span>
+                    </div>
+
+                    <!-- Judul -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">
+                            Judul <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            v-model="newItem.judul" 
+                            type="text" 
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.judul ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                            placeholder="Judul Bahan Ajar"
+                        >
+                        <span v-if="errors.judul" class="text-red-500 text-xs mt-1">{{ errors.judul }}</span>
+                    </div>
+
+                    <!-- Kategori -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">
+                            Kategori <span class="text-red-500">*</span>
+                        </label>
+                        <select 
+                            v-model="newItem.kategori" 
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.kategori ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                        >
+                            <option value="">Pilih Kategori</option>
+                            <option v-for="kat in kategoriList" :key="kat" :value="kat">
+                                {{ kat }}
+                            </option>
+                        </select>
+                        <span v-if="errors.kategori" class="text-red-500 text-xs mt-1">{{ errors.kategori }}</span>
+                    </div>
+
+                    <!-- UPBJJ -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">
+                            UPBJJ <span class="text-red-500">*</span>
+                        </label>
+                        <select 
+                            v-model="newItem.upbjj" 
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.upbjj ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                        >
+                            <option value="">Pilih UPBJJ</option>
+                            <option v-for="u in upbjjList" :key="u" :value="u">
+                                {{ u }}
+                            </option>
+                        </select>
+                        <span v-if="errors.upbjj" class="text-red-500 text-xs mt-1">{{ errors.upbjj }}</span>
+                    </div>
+
+                    <!-- Lokasi Rak -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">
+                            Lokasi Rak <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            v-model="newItem.lokasiRak" 
+                            type="text" 
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.lokasiRak ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                            placeholder="Contoh: R1-A3"
+                        >
+                        <span v-if="errors.lokasiRak" class="text-red-500 text-xs mt-1">{{ errors.lokasiRak }}</span>
+                    </div>
+
+                    <!-- Harga -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">
+                            Harga <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            v-model.number="newItem.harga" 
+                            type="number" 
+                            class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                            :class="errors.harga ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                            placeholder="0"
+                            min="0"
+                        >
+                        <span v-if="errors.harga" class="text-red-500 text-xs mt-1">{{ errors.harga }}</span>
+                    </div>
+
+                    <!-- Qty -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">Jumlah Stok</label>
+                        <input 
+                            v-model.number="newItem.qty" 
+                            type="number" 
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                            placeholder="0"
+                            min="0"
+                        >
+                    </div>
+
+                    <!-- Safety -->
+                    <div>
+                        <label class="block mb-1 text-sm font-medium text-gray-700">Safety Stock</label>
+                        <input 
+                            v-model.number="newItem.safety" 
+                            type="number" 
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                            placeholder="0"
+                            min="0"
+                        >
+                    </div>
+                </div>
+
+                <!-- Catatan -->
+                <div class="mt-4">
+                    <label class="block mb-1 text-sm font-medium text-gray-700">Catatan (HTML)</label>
+                    <textarea 
+                        v-model="newItem.catatanHTML" 
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                        rows="2"
+                        placeholder="Catatan tambahan (mendukung HTML)"
+                    ></textarea>
+                </div>
+
+                <p class="text-xs text-gray-500 mt-4 bg-gray-50 p-3 rounded">
+                    Tekan <kbd class="bg-gray-200 px-2 py-0.5 rounded text-xs">Enter</kbd> untuk menyimpan atau 
+                    <kbd class="bg-gray-200 px-2 py-0.5 rounded text-xs">Esc</kbd> untuk membatalkan
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button @click="closeAddForm" type="button" class="text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-100 font-medium rounded-lg text-sm px-5 py-2.5">Batal</button>
+                <button @click="addItem" type="button" class="text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5">Simpan</button>
+            </div>
+        </div>
+    </div>
+</div>

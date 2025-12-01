@@ -1,0 +1,25 @@
+<!-- Template: Status Badge Component -->
+<!-- 
+    Komponen badge status dengan tooltip
+    Menggunakan:
+    - computed properties untuk dynamic styling
+    - v-if/v-show untuk conditional display
+    - v-html untuk render HTML content di tooltip
+    - Mouse events untuk hover functionality
+-->
+<div 
+    class="tooltip-container inline-block"
+    @mouseenter="handleMouseEnter"
+    @mouseleave="handleMouseLeave"
+>
+    <span :class="badgeClasses">
+        <span v-text="badgeLabel"></span>
+    </span>
+    
+    <!-- Tooltip - v-show untuk toggle display -->
+    <div 
+        v-if="tooltip && showTooltip"
+        class="tooltip-box"
+        v-html="tooltip"
+    ></div>
+</div>

@@ -1,0 +1,252 @@
+<!-- Template: Order Form Component -->
+<!-- 
+    Komponen ini mengimplementasikan:
+    - v-model untuk two-way data binding pada form
+    - v-if/v-else untuk conditional rendering (success/form)
+    - computed properties untuk selectedPaket, totalHarga, isFormValid
+    - watchers untuk real-time validation
+    - Event handler untuk form submission
+    - Validasi input dengan error messages
+-->
+<div class="order-form-container">
+    <!-- Header -->
+    <div class="mb-6">
+        <h2 class="text-xl font-bold text-gray-800">
+            Formulir Pemesanan Bahan Ajar
+        </h2>
+        <p class="text-gray-500 text-sm mt-1">
+            Silakan lengkapi formulir di bawah ini untuk melakukan pemesanan
+        </p>
+    </div>
+
+    <!-- Success Message - v-if untuk conditional rendering setelah submit berhasil -->
+    <div v-if="submitted && orderResult && orderResult.success" class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="p-8 text-center">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-green-600 mb-2">Pesanan Berhasil!</h3>
+            <p class="text-gray-600 mb-6">{{ orderResult.message }}</p>
+            
+            <div class="bg-gray-50 rounded-lg p-4 max-w-md mx-auto mb-6 text-left">
+                <h4 class="font-medium text-gray-700 mb-2">Ringkasan Pesanan:</h4>
+                <div class="text-sm space-y-1">
+                    <p><strong>NIM:</strong> {{ orderResult.data.nim }}</p>
+                    <p><strong>Nama:</strong> {{ orderResult.data.nama }}</p>
+                    <p><strong>Paket:</strong> {{ orderResult.data.paket }}</p>
+                    <p><strong>Total:</strong> <span class="text-green-600 font-bold">{{ formatCurrency(orderResult.data.total) }}</span></p>
+                </div>
+            </div>
+            
+            <button @click="createNewOrder" type="button" class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5">
+                Buat Pesanan Baru
+            </button>
+        </div>
+    </div>
+
+    <!-- Order Form - v-else untuk menampilkan form jika belum submit -->
+    <div v-else class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="p-6">
+            <form @submit.prevent="submitOrder">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Left Column - Data Pemesan -->
+                    <div>
+                        <h3 class="font-medium text-gray-800 mb-4 pb-2 border-b">
+                            Data Pemesan
+                        </h3>
+
+                        <!-- NIM - v-model dengan watcher untuk validasi realtime -->
+                        <div class="mb-4">
+                            <label class="block mb-1 text-sm font-medium text-gray-700">
+                                NIM <span class="text-red-500">*</span>
+                            </label>
+                            <input 
+                                v-model="form.nim"
+                                type="text" 
+                                class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                                :class="errors.nim ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                                placeholder="Masukkan NIM (min. 9 digit)"
+                            >
+                            <span v-if="errors.nim" class="text-red-500 text-xs mt-1">{{ errors.nim }}</span>
+                        </div>
+
+                        <!-- Nama -->
+                        <div class="mb-4">
+                            <label class="block mb-1 text-sm font-medium text-gray-700">
+                                Nama Lengkap <span class="text-red-500">*</span>
+                            </label>
+                            <input 
+                                v-model="form.nama"
+                                type="text" 
+                                class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                                :class="errors.nama ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                                placeholder="Masukkan nama lengkap"
+                            >
+                            <span v-if="errors.nama" class="text-red-500 text-xs mt-1">{{ errors.nama }}</span>
+                        </div>
+
+                        <!-- Email - v-model dengan watcher untuk validasi format -->
+                        <div class="mb-4">
+                            <label class="block mb-1 text-sm font-medium text-gray-700">Email</label>
+                            <input 
+                                v-model="form.email"
+                                type="email" 
+                                class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                                :class="errors.email ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                                placeholder="email@example.com"
+                            >
+                            <span v-if="errors.email" class="text-red-500 text-xs mt-1">{{ errors.email }}</span>
+                        </div>
+
+                        <!-- Telepon -->
+                        <div class="mb-4">
+                            <label class="block mb-1 text-sm font-medium text-gray-700">
+                                No. Telepon <span class="text-red-500">*</span>
+                            </label>
+                            <input 
+                                v-model="form.telepon"
+                                type="tel" 
+                                class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                                :class="errors.telepon ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                                placeholder="08xxxxxxxxxx"
+                            >
+                            <span v-if="errors.telepon" class="text-red-500 text-xs mt-1">{{ errors.telepon }}</span>
+                        </div>
+
+                        <!-- Alamat -->
+                        <div class="mb-4">
+                            <label class="block mb-1 text-sm font-medium text-gray-700">
+                                Alamat Pengiriman <span class="text-red-500">*</span>
+                            </label>
+                            <textarea 
+                                v-model="form.alamat"
+                                class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                                :class="errors.alamat ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                                rows="3"
+                                placeholder="Masukkan alamat lengkap pengiriman"
+                            ></textarea>
+                            <span v-if="errors.alamat" class="text-red-500 text-xs mt-1">{{ errors.alamat }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Pilih Paket -->
+                    <div>
+                        <h3 class="font-medium text-gray-800 mb-4 pb-2 border-b">
+                            Pilih Paket
+                        </h3>
+
+                        <!-- Paket Bahan Ajar - v-model dengan select -->
+                        <div class="mb-4">
+                            <label class="block mb-1 text-sm font-medium text-gray-700">
+                                Paket Bahan Ajar <span class="text-red-500">*</span>
+                            </label>
+                            <select 
+                                v-model="form.paketKode"
+                                class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                                :class="errors.paketKode ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                            >
+                                <option value="">-- Pilih Paket --</option>
+                                <!-- v-for untuk iterasi paket -->
+                                <option v-for="p in paket" :key="p.kode" :value="p.kode">
+                                    {{ p.kode }} - {{ p.nama }}
+                                </option>
+                            </select>
+                            <span v-if="errors.paketKode" class="text-red-500 text-xs mt-1">{{ errors.paketKode }}</span>
+                        </div>
+
+                        <!-- Detail Paket - v-if conditional berdasarkan selectedPaket -->
+                        <div v-if="selectedPaket" class="bg-blue-50 rounded-lg p-4 mb-4">
+                            <h4 class="font-medium text-blue-700 mb-2">Detail Paket: {{ selectedPaket.nama }}</h4>
+                            <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                                <li v-for="(kode, idx) in selectedPaket.isi" :key="idx">
+                                    {{ kode }}
+                                </li>
+                            </ul>
+                            <div class="mt-3 pt-3 border-t border-blue-200 flex justify-between items-center">
+                                <span class="text-gray-600">Harga Paket:</span>
+                                <span class="font-bold text-green-600 text-xl">
+                                    {{ formatCurrency(selectedPaket.harga) }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Ekspedisi -->
+                        <div class="mb-4">
+                            <label class="block mb-1 text-sm font-medium text-gray-700">
+                                Ekspedisi <span class="text-red-500">*</span>
+                            </label>
+                            <select 
+                                v-model="form.ekspedisiKode"
+                                class="bg-gray-50 border text-gray-900 text-sm rounded-lg block w-full p-2.5"
+                                :class="errors.ekspedisiKode ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'"
+                            >
+                                <option value="">-- Pilih Ekspedisi --</option>
+                                <option v-for="exp in pengirimanList" :key="exp.kode" :value="exp.kode">
+                                    {{ exp.nama }}
+                                </option>
+                            </select>
+                            <span v-if="errors.ekspedisiKode" class="text-red-500 text-xs mt-1">{{ errors.ekspedisiKode }}</span>
+                        </div>
+
+                        <!-- Catatan -->
+                        <div class="mb-4">
+                            <label class="block mb-1 text-sm font-medium text-gray-700">Catatan (Opsional)</label>
+                            <textarea 
+                                v-model="form.catatan"
+                                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                                rows="2"
+                                placeholder="Catatan tambahan untuk pesanan..."
+                            ></textarea>
+                        </div>
+
+                        <!-- Order Summary - Menggunakan computed property totalHarga -->
+                        <div v-show="selectedPaket" class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-medium text-gray-700 mb-3">Ringkasan Biaya</h4>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Harga Paket:</span>
+                                    <span>{{ formatCurrency(selectedPaket ? selectedPaket.harga : 0) }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Ongkos Kirim:</span>
+                                    <span class="text-green-600">Gratis</span>
+                                </div>
+                                <div class="border-t pt-2 mt-2 flex justify-between font-bold text-lg">
+                                    <span>Total:</span>
+                                    <span class="text-green-600">{{ formatCurrency(totalHarga) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="mt-8 pt-4 border-t flex flex-col md:flex-row justify-between items-center gap-4">
+                    <p class="text-xs text-gray-500">
+                        <span class="text-red-500">*</span> Wajib diisi
+                    </p>
+                    <div class="flex gap-3">
+                        <button 
+                            type="button"
+                            @click="resetForm" 
+                            class="text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-100 font-medium rounded-lg text-sm px-5 py-2.5"
+                        >
+                            Reset Form
+                        </button>
+                        <button 
+                            type="submit"
+                            class="text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5"
+                            :disabled="!isFormValid || isSubmitting"
+                            :class="{ 'opacity-50 cursor-not-allowed': !isFormValid || isSubmitting }"
+                        >
+                            <span v-if="isSubmitting">Memproses...</span>
+                            <span v-else>Kirim Pesanan</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
